@@ -16,6 +16,8 @@ interface GameLayoutProps {
   shotClockDuration: number;
   onShotClockExpire: () => void;
   onQuit: () => void;
+  onTimeout?: () => void;
+  timeoutDisabled?: boolean;
   shotClockPaused: boolean;
   shotClockResetKey: number | string;
 
@@ -35,9 +37,12 @@ interface GameLayoutProps {
 
   // RoundResult
   showRoundResult: boolean;
-  roundResultPlayer1Move: Move | null;
-  roundResultPlayer2Move: Move | null;
+  myMove: Move | null;
+  opponentMove: Move | null;
   roundResult: "win" | "lose" | "draw" | null;
+  waitingForOpponent: boolean;
+  iTimedOut?: boolean;
+  opponentTimedOut?: boolean;
   onRoundResultClose: () => void;
 }
 
@@ -47,6 +52,8 @@ export function GameLayout({
   shotClockDuration,
   onShotClockExpire,
   onQuit,
+  onTimeout,
+  timeoutDisabled,
   shotClockPaused,
   shotClockResetKey,
   player1Name,
@@ -60,19 +67,22 @@ export function GameLayout({
   lastMovePlayer2,
   onMoveSelect,
   showRoundResult,
-  roundResultPlayer1Move,
-  roundResultPlayer2Move,
+  myMove,
+  opponentMove,
   roundResult,
+  waitingForOpponent,
+  iTimedOut,
+  opponentTimedOut,
   onRoundResultClose,
 }: GameLayoutProps) {
   return (
     <Layout>
       <LayoutHeader>
         <MenuTitle
-          countdownResetKey={showRoundResult ? round : undefined}
-          countdownSeconds={showRoundResult ? 3 : undefined}
+          countdownResetKey={showRoundResult && !waitingForOpponent ? round : undefined}
+          countdownSeconds={showRoundResult && !waitingForOpponent ? 3 : undefined}
           description={description}
-          onCountdownComplete={showRoundResult ? onRoundResultClose : undefined}
+          onCountdownComplete={showRoundResult && !waitingForOpponent ? onRoundResultClose : undefined}
           title={`Round ${round}`}
         />
       </LayoutHeader>
@@ -83,8 +93,10 @@ export function GameLayout({
             duration={shotClockDuration}
             onExpire={onShotClockExpire}
             onQuit={onQuit}
+            onTimeout={onTimeout}
             paused={shotClockPaused}
             resetKey={shotClockResetKey}
+            timeoutDisabled={timeoutDisabled}
           />
         ) : (
           <div className="flex justify-end">
@@ -106,10 +118,12 @@ export function GameLayout({
       <LayoutFooter>
         {showRoundResult ? (
           <RoundResult
-            onClose={onRoundResultClose}
-            player1Move={roundResultPlayer1Move}
-            player2Move={roundResultPlayer2Move}
+            iTimedOut={iTimedOut}
+            myMove={myMove}
+            opponentMove={opponentMove}
+            opponentTimedOut={opponentTimedOut}
             result={roundResult}
+            waitingForOpponent={waitingForOpponent}
           />
         ) : (
           <GameMoves

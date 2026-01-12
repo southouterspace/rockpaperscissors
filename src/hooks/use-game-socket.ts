@@ -186,6 +186,8 @@ export function useGameSocket(
             result: resultForStore,
             player1Name: myPlayer.name,
             player2Name: opponentPlayer.name,
+            player1TimedOut: myPlayer.timedOut,
+            player2TimedOut: opponentPlayer.timedOut,
           });
           setMyMove(null);
           setCurrentRound(message.round);

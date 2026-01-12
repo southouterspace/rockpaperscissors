@@ -191,35 +191,183 @@ function startShotClock(roomCode: string): void {
   });
 }
 
-const MOVES = ["rock", "paper", "scissors"] as const;
-
-function getRandomMove(): Move {
-  return MOVES[Math.floor(Math.random() * MOVES.length)];
-}
-
 function handleShotClockExpiry(roomCode: string): void {
   const room = rooms.get(roomCode);
   if (!room?.gameStarted) {
     return;
   }
 
+  // Mark any player who hasn't moved as timed out
   for (const playerId of room.players) {
-    if (!room.currentMoves[playerId]) {
-      room.currentMoves[playerId] = getRandomMove();
-      const client = getClientBySessionId(playerId);
-      broadcastToRoom(roomCode, {
-        type: "error",
-        message: `${client?.name || playerId} ran out of time - random move selected`,
-      });
+    if (!room.currentMoves[playerId] && !room.timedOutPlayers?.has(playerId)) {
+      if (!room.timedOutPlayers) {
+        room.timedOutPlayers = new Set();
+      }
+      room.timedOutPlayers.add(playerId);
     }
   }
 
-  // Check if round can be resolved
-  if (
-    room.players.length === 2 &&
-    Object.keys(room.currentMoves).length === 2
-  ) {
-    resolveRound(roomCode);
+  // Resolve round when all players have either moved or timed out
+  const allPlayersResolved = room.players.every(
+    (id) => room.currentMoves[id] || room.timedOutPlayers?.has(id)
+  );
+
+  if (room.players.length === 2 && allPlayersResolved) {
+    resolveRoundWithTimeouts(roomCode);
+  }
+}
+
+function resolveRoundWithTimeouts(roomCode: string): void {
+  const room = rooms.get(roomCode);
+  if (!room) {
+    return;
+  }
+
+  if (room.shotClockTimer) {
+    clearTimeout(room.shotClockTimer);
+    room.shotClockTimer = null;
+  }
+
+  const [player1Id, player2Id] = room.players;
+  const player1TimedOut = room.timedOutPlayers?.has(player1Id) ?? false;
+  const player2TimedOut = room.timedOutPlayers?.has(player2Id) ?? false;
+  const move1 = room.currentMoves[player1Id] ?? null;
+  const move2 = room.currentMoves[player2Id] ?? null;
+
+  let result: RoundResultType;
+  let winnerId: string | null = null;
+
+  if (player1TimedOut && player2TimedOut) {
+    // Both timed out = draw
+    result = "tie";
+  } else if (player1TimedOut) {
+    // Player 1 timed out = Player 2 wins
+    result = "player2";
+    winnerId = player2Id;
+  } else if (player2TimedOut) {
+    // Player 2 timed out = Player 1 wins
+    result = "player1";
+    winnerId = player1Id;
+  } else {
+    // Both made moves, use normal logic
+    result = determineWinner(move1!, move2!);
+    winnerId =
+      result === "player1" ? player1Id : result === "player2" ? player2Id : null;
+  }
+
+  if (winnerId) {
+    room.scores[winnerId] = (room.scores[winnerId] || 0) + 1;
+  }
+
+  const currentRoundNumber = room.currentRound;
+
+  // Track round in history
+  room.roundHistory.push({
+    round: currentRoundNumber,
+    player1Move: move1,
+    player2Move: move2,
+    result,
+  });
+
+  room.currentRound++;
+
+  const player1Client = getClientBySessionId(player1Id);
+  const player2Client = getClientBySessionId(player2Id);
+
+  const player1Result: PlayerRoundResult = {
+    id: player1Id,
+    name: player1Client?.name || "Unknown",
+    move: move1,
+    timedOut: player1TimedOut,
+  };
+
+  const player2Result: PlayerRoundResult = {
+    id: player2Id,
+    name: player2Client?.name || "Unknown",
+    move: move2,
+    timedOut: player2TimedOut,
+  };
+
+  const roomState = getRoomState(roomCode);
+  if (!roomState) {
+    return;
+  }
+
+  const roundResult: ServerMessage = {
+    type: "roundResult",
+    round: currentRoundNumber,
+    player1: player1Result,
+    player2: player2Result,
+    result,
+    ...roomState,
+  };
+
+  broadcastToRoom(roomCode, roundResult);
+
+  // Clear timed out players for next round
+  room.timedOutPlayers?.clear();
+
+  // Check for match winner
+  const matchWinner = checkMatchWinner(roomCode);
+  if (matchWinner) {
+    room.matchWinner = matchWinner;
+    room.gameStarted = false;
+    room.readyPlayers.clear();
+
+    // Persist match result to database
+    persistMatchResult(room, matchWinner).catch((error) => {
+      console.error("Failed to persist match result:", error);
+    });
+
+    const finalRoomState = getRoomState(roomCode);
+    if (finalRoomState) {
+      broadcastToRoom(roomCode, {
+        type: "matchEnd",
+        winner: matchWinner,
+        winnerName: getClientBySessionId(matchWinner)?.name || "Unknown",
+        ...finalRoomState,
+      });
+    }
+  } else {
+    // Reset for next round
+    room.currentMoves = {};
+    // Delay shot clock start by 3 seconds to allow round result display
+    setTimeout(() => {
+      startShotClock(roomCode);
+    }, 3000);
+  }
+}
+
+export function handleShotClockExpired(ws: ServerWebSocket<WebSocketData>) {
+  const client = clients.get(ws);
+  if (!client?.roomCode) {
+    return;
+  }
+
+  const playerId = client.sessionId;
+  const room = rooms.get(client.roomCode);
+
+  if (!room?.gameStarted) {
+    return;
+  }
+
+  if (!room.players.includes(playerId)) {
+    return;
+  }
+
+  // Mark this player as timed out
+  if (!room.timedOutPlayers) {
+    room.timedOutPlayers = new Set();
+  }
+  room.timedOutPlayers.add(playerId);
+
+  // Check if all players have either moved or timed out
+  const allPlayersResolved = room.players.every(
+    (id) => room.currentMoves[id] || room.timedOutPlayers?.has(id)
+  );
+
+  if (room.players.length === 2 && allPlayersResolved) {
+    resolveRoundWithTimeouts(client.roomCode);
   }
 }
 

@@ -50,6 +50,7 @@ function GameRoomComponent() {
   const setMyMove = useGameStore((state) => state.setMyMove);
   const setRoundResult = useGameStore((state) => state.setRoundResult);
   const setMatchResult = useGameStore((state) => state.setMatchResult);
+  const setScreen = useGameStore((state) => state.setScreen);
 
   // Check if we're in this room already
   const storeRoomCode = useGameStore((state) => state.roomCode);
@@ -65,6 +66,8 @@ function GameRoomComponent() {
   const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
   const [lastOpponentMove, setLastOpponentMove] = useState<Move | null>(null);
   const [waitingForRematch, setWaitingForRematch] = useState(false);
+  const [timeoutUsed, setTimeoutUsed] = useState(false);
+  const [shotClockKey, setShotClockKey] = useState(0);
 
   // Calculate scores for display
   const myScore = playerId ? (scores[playerId] ?? 0) : 0;
@@ -125,11 +128,12 @@ function GameRoomComponent() {
     send,
   ]);
 
-  // Reset waiting state when game starts
+  // Reset state when game starts
   useEffect(() => {
     if (gameStarted) {
       setWaitingForRematch(false);
       setMatchResult(null);
+      setTimeoutUsed(false);
     }
   }, [gameStarted, setMatchResult]);
 
@@ -150,17 +154,16 @@ function GameRoomComponent() {
   const handleMoveSelect = useCallback(
     (move: Move) => {
       setMyMove(move);
+      setShowRoundResult(true); // Show round result immediately with loading state
       send({ type: "makeMove", move });
     },
     [send, setMyMove]
   );
 
   const handleShotClockExpire = useCallback(() => {
-    // Auto-select a random move when time runs out
-    const moves: Move[] = ["rock", "paper", "scissors"];
-    const randomMove = moves[Math.floor(Math.random() * 3)];
-    handleMoveSelect(randomMove);
-  }, [handleMoveSelect]);
+    // Player loses the round when shot clock expires
+    send({ type: "shotClockExpired" });
+  }, [send]);
 
   const handleRoundResultClose = useCallback(() => {
     if (roundResult) {
@@ -178,8 +181,9 @@ function GameRoomComponent() {
   const handleLeaveRoom = useCallback(() => {
     send({ type: "leaveRoom" });
     leaveRoom();
+    setScreen("lobby");
     navigate({ to: "/lobby" });
-  }, [send, leaveRoom, navigate]);
+  }, [send, leaveRoom, setScreen, navigate]);
 
   const handleForfeit = useCallback(() => {
     send({ type: "forfeitGame" });
@@ -190,6 +194,11 @@ function GameRoomComponent() {
     send({ type: "restartMatch" });
     setWaitingForRematch(true);
   }, [send]);
+
+  const handleTimeout = useCallback(() => {
+    setTimeoutUsed(true);
+    setShotClockKey((prev) => prev + 1);
+  }, []);
 
   // Show loading while redirecting if no player name
   if (!playerName) {
@@ -209,7 +218,7 @@ function GameRoomComponent() {
             <Badge>{roomCode}</Badge>
           </LayoutHeader>
           <CardContent className="flex flex-1 flex-col items-center justify-center gap-2">
-            <p className="text-lg text-muted-foreground">
+            <p className="text-center text-lg text-muted-foreground">
               WAITING FOR OPPONENT...
             </p>
           </CardContent>
@@ -245,26 +254,31 @@ function GameRoomComponent() {
     <>
       <GameLayout
         description={myMove ? "WAITING FOR OPPONENT..." : "SELECT YOUR MOVE"}
+        iTimedOut={roundResult?.player1TimedOut}
         lastMovePlayer1={lastMyMove}
         lastMovePlayer2={lastOpponentMove}
         movesDisabled={!isInGame || myMove !== null}
+        myMove={myMove ?? roundResult?.player1Move ?? null}
         onMoveSelect={handleMoveSelect}
         onQuit={handleQuitClick}
         onRoundResultClose={handleRoundResultClose}
         onShotClockExpire={handleShotClockExpire}
+        onTimeout={handleTimeout}
+        opponentMove={roundResult?.player2Move ?? null}
+        opponentTimedOut={roundResult?.player2TimedOut}
         player1Name={playerName || "You"}
         player1Score={myScore}
         player2Name={opponentName || "Opponent"}
         player2Score={opponentScore}
         round={currentRound}
         roundResult={getMyRoundResult()}
-        roundResultPlayer1Move={roundResult?.player1Move ?? null}
-        roundResultPlayer2Move={roundResult?.player2Move ?? null}
         selectedMove={myMove}
         shotClockDuration={isInGame ? shotClockDuration : 0}
         shotClockPaused={myMove !== null || showRoundResult}
-        shotClockResetKey={currentRound}
+        shotClockResetKey={`${currentRound}-${shotClockKey}`}
         showRoundResult={showRoundResult}
+        timeoutDisabled={timeoutUsed}
+        waitingForOpponent={myMove !== null && roundResult === null}
         winsNeeded={winsNeeded}
       />
 
@@ -281,7 +295,7 @@ function GameRoomComponent() {
             <Button
               className="w-full"
               onClick={handleForfeit}
-              variant="destructive"
+              variant="secondary"
             >
               FORFEIT
             </Button>
@@ -296,6 +310,7 @@ function GameRoomComponent() {
 
       {/* Match End Dialog */}
       <MatchEndDialog
+        isForfeit={matchResult?.isForfeit ?? false}
         isWinner={matchResult?.winnerId === playerId}
         onBackToLobby={handleLeaveRoom}
         onPlayAgain={handlePlayAgain}

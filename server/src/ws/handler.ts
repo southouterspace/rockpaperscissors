@@ -16,7 +16,7 @@ import { handleForfeitGame } from "./handlers/forfeit-game";
 import { handleInvitePlayer } from "./handlers/invite-player";
 import { handleJoinRoom } from "./handlers/join-room";
 import { handleLeaveRoom, leaveRoomLogic } from "./handlers/leave-room";
-import { handleMakeMove } from "./handlers/make-move";
+import { handleMakeMove, handleShotClockExpired } from "./handlers/make-move";
 import { handleReadyToPlay } from "./handlers/ready-to-play";
 import { handleReconnect } from "./handlers/reconnect";
 import { handleRestartMatch } from "./handlers/restart-match";
@@ -96,6 +96,9 @@ function handleMessage(
       break;
     case "declineInvitation":
       handleDeclineInvitation(ws, message.roomCode, message.fromId);
+      break;
+    case "shotClockExpired":
+      handleShotClockExpired(ws);
       break;
     default:
       console.log("Unhandled message type:", message.type);

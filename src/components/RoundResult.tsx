@@ -1,85 +1,114 @@
-import { MovePixelArt } from "@/components/MovePixelArt";
-import { Button } from "@/components/ui/8bit/button";
+import { MenuTitle } from "@/components/MenuTitle";
+import { Spinner } from "@/components/ui/8bit/spinner";
 import type { Move } from "@/types/messages";
 
 interface RoundResultProps {
-  onClose: () => void;
-  player1Move: Move | null;
-  player2Move: Move | null;
+  /** My move for this round */
+  myMove: Move | null;
+  /** Opponent's move (null if still waiting or opponent timed out) */
+  opponentMove: Move | null;
+  /** Round result from my perspective */
   result: "win" | "lose" | "draw" | null;
+  /** Whether I timed out this round */
+  iTimedOut?: boolean;
+  /** Whether opponent timed out this round */
+  opponentTimedOut?: boolean;
+  /** Whether we're waiting for opponent's move */
+  waitingForOpponent: boolean;
 }
 
-const MOVE_LABEL: Record<Move, string> = {
-  rock: "ROCK",
-  paper: "PAPER",
-  scissors: "SCISSORS",
+const VICTORY_OUTCOMES: Record<string, string> = {
+  "rock-scissors": "Rock smashes scissors",
+  "scissors-paper": "Scissors cut paper",
+  "paper-rock": "Paper covers rock",
 };
 
+const MOVE_LABELS: Record<Move, string> = {
+  rock: "rock",
+  paper: "paper",
+  scissors: "scissors",
+};
+
+function getOutcomeDescription(
+  result: "win" | "lose" | "draw",
+  myMove: Move | null,
+  opponentMove: Move | null,
+  iTimedOut?: boolean,
+  opponentTimedOut?: boolean
+): string {
+  if (iTimedOut && opponentTimedOut) {
+    return "Both players timed out";
+  }
+  if (iTimedOut) {
+    return "You ran out of time";
+  }
+  if (opponentTimedOut) {
+    return "Opponent ran out of time";
+  }
+  if (result === "draw" && myMove) {
+    return `Both players chose ${MOVE_LABELS[myMove]}`;
+  }
+  if (result === "win" && myMove && opponentMove) {
+    return VICTORY_OUTCOMES[`${myMove}-${opponentMove}`] || "";
+  }
+  if (result === "lose" && myMove && opponentMove) {
+    return VICTORY_OUTCOMES[`${opponentMove}-${myMove}`] || "";
+  }
+  return "";
+}
+
+function getResultTitle(result: "win" | "lose" | "draw"): string {
+  if (result === "win") return "You Win!";
+  if (result === "lose") return "You Lose!";
+  return "Draw";
+}
+
+function getResultColor(result: "win" | "lose" | "draw"): string {
+  if (result === "win") return "text-green-500";
+  if (result === "lose") return "text-red-500";
+  return "text-yellow-500";
+}
+
 export function RoundResult({
-  onClose,
-  player1Move,
-  player2Move,
+  myMove,
+  opponentMove,
   result,
+  iTimedOut = false,
+  opponentTimedOut = false,
+  waitingForOpponent,
 }: RoundResultProps) {
-  function getResultMessage(): string {
-    if (result === "win") {
-      return "YOU WIN!";
-    }
-    if (result === "lose") {
-      return "YOU LOSE!";
-    }
-    return "DRAW!";
-  }
-
-  function getResultColor(): string {
-    if (result === "win") {
-      return "text-green-500";
-    }
-    if (result === "lose") {
-      return "text-red-500";
-    }
-    return "text-yellow-500";
-  }
-
-  return (
-    <>
-      <div className="flex h-[204px] w-full items-center justify-center gap-6">
-        <div className="flex flex-1 flex-col items-center gap-1">
-          <div className="flex h-24 w-24 items-center justify-center">
-            {player1Move ? (
-              <MovePixelArt move={player1Move} size={96} />
-            ) : (
-              <span className="text-4xl text-muted-foreground">?</span>
-            )}
-          </div>
-          <span className="text-xs">
-            {player1Move ? MOVE_LABEL[player1Move] : ""}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-center">
-          <span className={`font-bold text-lg ${getResultColor()}`}>
-            {getResultMessage()}
-          </span>
-        </div>
-
-        <div className="flex flex-1 flex-col items-center gap-1">
-          <div className="flex h-24 w-24 items-center justify-center">
-            {player2Move ? (
-              <MovePixelArt move={player2Move} size={96} />
-            ) : (
-              <span className="text-4xl text-muted-foreground">?</span>
-            )}
-          </div>
-          <span className="text-xs">
-            {player2Move ? MOVE_LABEL[player2Move] : ""}
-          </span>
-        </div>
+  // Loading state: waiting for opponent
+  if (waitingForOpponent) {
+    return (
+      <div className="flex h-[204px] w-full flex-col items-center justify-center gap-4">
+        <Spinner className="size-12" variant="diamond" />
+        <p className="text-muted-foreground">Waiting for opponent...</p>
       </div>
+    );
+  }
 
-      <Button className="w-[calc(100%-12px)]" onClick={onClose}>
-        NEXT ROUND
-      </Button>
-    </>
-  );
+  // Result state
+  if (result) {
+    const title = getResultTitle(result);
+    const description = getOutcomeDescription(
+      result,
+      myMove,
+      opponentMove,
+      iTimedOut,
+      opponentTimedOut
+    );
+
+    return (
+      <div className="flex h-[204px] w-full flex-col items-center justify-center">
+        <MenuTitle
+          align="center"
+          className={getResultColor(result)}
+          description={description}
+          title={title}
+        />
+      </div>
+    );
+  }
+
+  return null;
 }

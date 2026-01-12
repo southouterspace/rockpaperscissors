@@ -1,11 +1,13 @@
 import type { Move, RoundResultType } from "./messages";
 
 export interface RoundResult {
-  player1Move: Move;
-  player2Move: Move;
+  player1Move: Move | null;
+  player2Move: Move | null;
   result: RoundResultType;
   player1Name: string;
   player2Name: string;
+  player1TimedOut?: boolean;
+  player2TimedOut?: boolean;
 }
 
 export interface MatchResult {

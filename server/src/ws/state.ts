@@ -7,8 +7,8 @@ import type { ServerWebSocket } from "bun";
 
 export interface RoundData {
   round: number;
-  player1Move: Move;
-  player2Move: Move;
+  player1Move: Move | null;
+  player2Move: Move | null;
   result: RoundResultType;
 }
 
@@ -52,6 +52,7 @@ export interface Room {
     timer: ReturnType<typeof setTimeout> | null;
   } | null;
   roundHistory: RoundData[];
+  timedOutPlayers?: Set<string>; // Players who timed out this round
 }
 
 export const RECONNECT_GRACE_PERIOD = 2 * 60 * 1000; // 2 minutes

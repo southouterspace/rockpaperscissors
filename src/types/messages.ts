@@ -28,7 +28,8 @@ export type ClientMessage =
   | { type: "acceptInvitation"; roomCode: string; fromId: string }
   | { type: "declineInvitation"; roomCode: string; fromId: string }
   | { type: "cancelInvitation"; targetId: string }
-  | { type: "callTimeout" };
+  | { type: "callTimeout" }
+  | { type: "shotClockExpired" };
 
 // Server -> Client Messages
 
@@ -181,5 +182,6 @@ export interface RoomState {
 export interface PlayerRoundResult {
   id: string;
   name: string;
-  move: Move;
+  move: Move | null;
+  timedOut?: boolean;
 }

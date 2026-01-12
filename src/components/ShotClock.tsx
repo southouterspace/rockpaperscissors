@@ -14,6 +14,8 @@ interface ShotClockProps {
   onQuit?: () => void;
   /** Called when user clicks timeout button */
   onTimeout?: () => void;
+  /** Whether timeout button is disabled */
+  timeoutDisabled?: boolean;
   /** Change this value to reset the timer */
   resetKey?: number | string;
   /** Pause the countdown */
@@ -25,6 +27,7 @@ export function ShotClock({
   onExpire,
   onQuit,
   onTimeout,
+  timeoutDisabled = false,
   resetKey,
   paused = false,
 }: ShotClockProps) {
@@ -75,7 +78,8 @@ export function ShotClock({
     <div className="flex w-full flex-col gap-2">
       <div className="flex items-center justify-between">
         <Button
-          className={cn(isCritical && "animate-pulse")}
+          className={cn(isCritical && !timeoutDisabled && "animate-pulse")}
+          disabled={timeoutDisabled}
           onClick={onTimeout}
           size="sm"
           variant="secondary"

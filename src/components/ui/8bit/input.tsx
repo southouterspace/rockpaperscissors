@@ -24,11 +24,13 @@ export interface BitInputProps
 
 function Input({ ...props }: BitInputProps) {
   const { className, font } = props;
+  const isFullWidth = className?.includes("w-full");
 
   return (
     <div
       className={cn(
         "group !p-0 relative flex items-center border-foreground border-y-6 dark:border-ring",
+        isFullWidth && "!w-[calc(100%-0.75rem)]",
         className
       )}
     >
