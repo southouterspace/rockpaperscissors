@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/8bit/button";
 import {
   Dialog,
@@ -62,8 +63,10 @@ export function MatchEndDialog({
                   PLAY AGAIN
                 </Button>
               )}
-              <Button className="w-full" onClick={onBackToLobby} variant="outline">
-                BACK TO LOBBY
+              <Button asChild className="w-full" variant="outline">
+                <Link onClick={onBackToLobby} to="/lobby">
+                  BACK TO LOBBY
+                </Link>
               </Button>
             </>
           )}

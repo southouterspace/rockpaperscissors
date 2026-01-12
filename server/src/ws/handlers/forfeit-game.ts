@@ -1,20 +1,23 @@
 import type { ServerWebSocket } from "bun";
-import { clients, rooms, type WebSocketData } from "../state";
+import { broadcastRoomListUpdate } from "../broadcast";
+import { clients, rooms, sessions, type WebSocketData } from "../state";
 import {
   broadcastToRoom,
   getClientBySessionId,
   getRoomState,
   send,
 } from "../utils";
+import { leaveRoomLogic } from "./leave-room";
 
-export function handleForfeitGame(ws: ServerWebSocket<WebSocketData>) {
+export function handleForfeitGame(ws: ServerWebSocket<WebSocketData>): void {
   const client = clients.get(ws);
   if (!client?.roomCode) {
     return;
   }
 
   const forfeitingPlayerId = client.sessionId;
-  const room = rooms.get(client.roomCode);
+  const roomCode = client.roomCode;
+  const room = rooms.get(roomCode);
 
   if (!room) {
     send(ws, { type: "error", message: "Room not found" });
@@ -46,18 +49,19 @@ export function handleForfeitGame(ws: ServerWebSocket<WebSocketData>) {
     room.activeTimeout = null;
   }
 
-  // Set the match winner
+  // Set the match winner and end the game
   room.matchWinner = winningPlayerId;
   room.gameStarted = false;
 
-  // Get forfeiting player's name
-  const forfeiterClient = getClientBySessionId(forfeitingPlayerId);
-  const forfeiterName = forfeiterClient?.name || "Unknown";
+  // Get forfeiting player's name before they leave
+  const forfeiterName = client.name || "Unknown";
 
-  // Broadcast game forfeit
-  const roomState = getRoomState(client.roomCode);
+  // Get room state before the forfeiter leaves (so scores are included)
+  const roomState = getRoomState(roomCode);
+
+  // Broadcast forfeit to all players in room (including the forfeiter)
   if (roomState) {
-    broadcastToRoom(client.roomCode, {
+    broadcastToRoom(roomCode, {
       type: "gameForfeit",
       forfeiterId: forfeitingPlayerId,
       forfeiterName,
@@ -65,5 +69,24 @@ export function handleForfeitGame(ws: ServerWebSocket<WebSocketData>) {
       winnerName,
       ...roomState,
     });
+  }
+
+  // Now remove the forfeiting player from the room
+  const wasPublic = room.isPublic;
+  leaveRoomLogic(forfeitingPlayerId, roomCode);
+
+  // Update client state
+  client.roomCode = null;
+  const session = sessions.get(client.sessionId);
+  if (session) {
+    session.roomCode = null;
+  }
+
+  // Send leftRoom to the forfeiter so they know they've been removed
+  send(ws, { type: "leftRoom" });
+
+  // Broadcast room list update if room was public
+  if (wasPublic) {
+    broadcastRoomListUpdate();
   }
 }

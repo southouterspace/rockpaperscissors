@@ -1,6 +1,6 @@
 // biome-ignore lint/style/useFilenamingConvention: TanStack Router dynamic route convention
 
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { GameLayout } from "@/components/GameLayout";
 import { Layout, LayoutFooter, LayoutHeader } from "@/components/Layout";
@@ -154,7 +154,6 @@ function GameRoomComponent() {
   const handleMoveSelect = useCallback(
     (move: Move) => {
       setMyMove(move);
-      setShowRoundResult(true); // Show round result immediately with loading state
       send({ type: "makeMove", move });
     },
     [send, setMyMove]
@@ -178,16 +177,20 @@ function GameRoomComponent() {
     setShowQuitDrawer(true);
   }, []);
 
-  const handleLeaveRoom = useCallback(() => {
-    send({ type: "leaveRoom" });
-    leaveRoom();
-    setScreen("lobby");
-    navigate({ to: "/lobby" });
-  }, [send, leaveRoom, setScreen, navigate]);
+  const handleLeaveRoom = useCallback(
+    (e?: React.MouseEvent) => {
+      // Don't prevent default - let the Link navigate
+      send({ type: "leaveRoom" });
+      leaveRoom();
+      setScreen("lobby");
+    },
+    [send, leaveRoom, setScreen]
+  );
 
   const handleForfeit = useCallback(() => {
+    // Send forfeit to server - it will handle removing us from the room
+    // and send leftRoom back, which triggers navigation via the gameForfeit handler
     send({ type: "forfeitGame" });
-    setShowQuitDrawer(false);
   }, [send]);
 
   const handlePlayAgain = useCallback(() => {
@@ -278,7 +281,6 @@ function GameRoomComponent() {
         shotClockResetKey={`${currentRound}-${shotClockKey}`}
         showRoundResult={showRoundResult}
         timeoutDisabled={timeoutUsed}
-        waitingForOpponent={myMove !== null && roundResult === null}
         winsNeeded={winsNeeded}
       />
 
@@ -292,12 +294,10 @@ function GameRoomComponent() {
             </DrawerDescription>
           </DrawerHeader>
           <DrawerFooter>
-            <Button
-              className="w-full"
-              onClick={handleForfeit}
-              variant="secondary"
-            >
-              FORFEIT
+            <Button asChild className="w-full" variant="secondary">
+              <Link onClick={handleForfeit} to="/lobby">
+                FORFEIT
+              </Link>
             </Button>
             <DrawerClose asChild>
               <Button className="w-full" variant="outline">

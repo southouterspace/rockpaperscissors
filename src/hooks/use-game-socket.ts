@@ -214,7 +214,10 @@ export function useGameSocket(
           });
           updateScores(message.scores);
           setGameStarted(false);
-          setScreen("matchEnd");
+          // Only show match end dialog for the winner, not the forfeiter
+          if (message.forfeiterId !== playerId) {
+            setScreen("matchEnd");
+          }
           toast({
             title:
               message.forfeiterId === playerId

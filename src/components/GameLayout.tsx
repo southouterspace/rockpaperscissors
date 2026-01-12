@@ -40,7 +40,6 @@ interface GameLayoutProps {
   myMove: Move | null;
   opponentMove: Move | null;
   roundResult: "win" | "lose" | "draw" | null;
-  waitingForOpponent: boolean;
   iTimedOut?: boolean;
   opponentTimedOut?: boolean;
   onRoundResultClose: () => void;
@@ -70,7 +69,6 @@ export function GameLayout({
   myMove,
   opponentMove,
   roundResult,
-  waitingForOpponent,
   iTimedOut,
   opponentTimedOut,
   onRoundResultClose,
@@ -79,10 +77,10 @@ export function GameLayout({
     <Layout>
       <LayoutHeader>
         <MenuTitle
-          countdownResetKey={showRoundResult && !waitingForOpponent ? round : undefined}
-          countdownSeconds={showRoundResult && !waitingForOpponent ? 3 : undefined}
+          countdownResetKey={showRoundResult && roundResult ? round : undefined}
+          countdownSeconds={showRoundResult && roundResult ? 3 : undefined}
           description={description}
-          onCountdownComplete={showRoundResult && !waitingForOpponent ? onRoundResultClose : undefined}
+          onCountdownComplete={showRoundResult && roundResult ? onRoundResultClose : undefined}
           title={`Round ${round}`}
         />
       </LayoutHeader>
@@ -120,10 +118,10 @@ export function GameLayout({
           <RoundResult
             iTimedOut={iTimedOut}
             myMove={myMove}
+            onClose={onRoundResultClose}
             opponentMove={opponentMove}
             opponentTimedOut={opponentTimedOut}
             result={roundResult}
-            waitingForOpponent={waitingForOpponent}
           />
         ) : (
           <GameMoves

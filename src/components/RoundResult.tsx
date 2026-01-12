@@ -1,5 +1,5 @@
+import { Button } from "@/components/ui/8bit/button";
 import { MenuTitle } from "@/components/MenuTitle";
-import { Spinner } from "@/components/ui/8bit/spinner";
 import type { Move } from "@/types/messages";
 
 interface RoundResultProps {
@@ -13,8 +13,8 @@ interface RoundResultProps {
   iTimedOut?: boolean;
   /** Whether opponent timed out this round */
   opponentTimedOut?: boolean;
-  /** Whether we're waiting for opponent's move */
-  waitingForOpponent: boolean;
+  /** Called when user clicks Next Round */
+  onClose: () => void;
 }
 
 const VICTORY_OUTCOMES: Record<string, string> = {
@@ -75,18 +75,8 @@ export function RoundResult({
   result,
   iTimedOut = false,
   opponentTimedOut = false,
-  waitingForOpponent,
+  onClose,
 }: RoundResultProps) {
-  // Loading state: waiting for opponent
-  if (waitingForOpponent) {
-    return (
-      <div className="flex h-[204px] w-full flex-col items-center justify-center gap-4">
-        <Spinner className="size-12" variant="diamond" />
-        <p className="text-muted-foreground">Waiting for opponent...</p>
-      </div>
-    );
-  }
-
   // Result state
   if (result) {
     const title = getResultTitle(result);
@@ -99,14 +89,19 @@ export function RoundResult({
     );
 
     return (
-      <div className="flex h-[204px] w-full flex-col items-center justify-center">
-        <MenuTitle
-          align="center"
-          className={getResultColor(result)}
-          description={description}
-          title={title}
-        />
-      </div>
+      <>
+        <div className="flex h-[140px] w-full flex-col items-center justify-center">
+          <MenuTitle
+            align="center"
+            className={getResultColor(result)}
+            description={description}
+            title={title}
+          />
+        </div>
+        <Button className="w-[calc(100%-12px)]" onClick={onClose}>
+          NEXT ROUND
+        </Button>
+      </>
     );
   }
 
