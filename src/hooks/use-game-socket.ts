@@ -72,6 +72,11 @@ export function useGameSocket(
           } else {
             setConnected(message.playerId, message.sessionId);
             hasAttemptedReconnect.current = false;
+            // Auto-set name if stored in localStorage
+            const storedName = useGameStore.getState().playerName;
+            if (storedName) {
+              sendRef.current?.({ type: "setName", name: storedName });
+            }
           }
           break;
 
@@ -322,14 +327,22 @@ export function useGameSocket(
           }
           break;
 
-        case "reconnectFailed":
+        case "reconnectFailed": {
           hasAttemptedReconnect.current = false;
-          setScreen("name");
-          toast({
-            title: "Session expired",
-            description: "Please enter your name to continue.",
-          });
+          // Check if we have a stored player name
+          const storedName = useGameStore.getState().playerName;
+          if (storedName) {
+            // Auto-set the name and go to menu
+            sendRef.current?.({ type: "setName", name: storedName });
+          } else {
+            setScreen("name");
+            toast({
+              title: "Session expired",
+              description: "Please enter your name to continue.",
+            });
+          }
           break;
+        }
 
         case "newSession":
           // Server issued a new session, store it

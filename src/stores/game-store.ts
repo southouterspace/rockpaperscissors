@@ -22,6 +22,7 @@ interface PendingInvitation {
 }
 
 const PLAYER_NAME_KEY = "rps_player_name";
+const SESSION_ID_KEY = "rps_session_id";
 const PENDING_ROOM_KEY = "rps_pending_room";
 
 function getStoredPlayerName(): string | null {
@@ -38,6 +39,26 @@ function storePlayerName(name: string | null): void {
       localStorage.setItem(PLAYER_NAME_KEY, name);
     } else {
       localStorage.removeItem(PLAYER_NAME_KEY);
+    }
+  } catch {
+    // Storage not available
+  }
+}
+
+function getStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeSessionId(sessionId: string | null): void {
+  try {
+    if (sessionId) {
+      localStorage.setItem(SESSION_ID_KEY, sessionId);
+    } else {
+      localStorage.removeItem(SESSION_ID_KEY);
     }
   } catch {
     // Storage not available
@@ -132,14 +153,17 @@ export const useGameStore = create<GameStore>((set) => ({
   // Initial state - restore from storage
   ...INITIAL_GAME_STATE,
   playerName: getStoredPlayerName(),
+  sessionId: getStoredSessionId(),
   soloGame: null,
   pendingRoomCode: getStoredPendingRoom(),
   onlineUsers: [],
   pendingInvitation: null,
 
   // Connection actions
-  setConnected: (playerId, sessionId) =>
-    set({ playerId, sessionId, isConnected: true }),
+  setConnected: (playerId, sessionId) => {
+    storeSessionId(sessionId);
+    set({ playerId, sessionId, isConnected: true });
+  },
 
   setDisconnected: () => set({ isConnected: false }),
 

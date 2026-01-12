@@ -67,10 +67,10 @@ function MenuComponent() {
           </Button>
           <Button
             className="w-[calc(100%-12px)]"
-            onClick={() => navigate({ to: "/leaderboard" })}
+            disabled
             variant="secondary"
           >
-            LEADERBOARD
+            LEADERBOARD (COMING SOON)
           </Button>
         </LayoutFooter>
       </Layout>

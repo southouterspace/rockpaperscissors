@@ -17,7 +17,8 @@ function send(
 export function getPublicRooms(): PublicRoomInfo[] {
   const publicRooms: PublicRoomInfo[] = [];
   for (const room of rooms.values()) {
-    if (room.isPublic) {
+    // Only show public rooms that have at least one player
+    if (room.isPublic && room.players.length > 0) {
       // Find the host client to get their name
       let hostName = "Unknown";
       for (const client of clients.values()) {
