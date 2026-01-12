@@ -217,8 +217,8 @@ function SoloPlayComponent() {
       player2Score={computerScore}
       round={round}
       roundResult={roundResult}
-      roundResultPlayer1Move={playerMove}
-      roundResultPlayer2Move={computerMove}
+      myMove={playerMove}
+      opponentMove={computerMove}
       selectedMove={playerMove}
       shotClockDuration={shotClock}
       shotClockPaused={playerMove !== null}
