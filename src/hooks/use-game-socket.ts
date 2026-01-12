@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "@/components/ui/8bit/toast";
 import { useGameStore } from "@/stores/game-store";
 import type { ClientMessage, ServerMessage } from "@/types/messages";
@@ -19,27 +19,31 @@ function getWsUrl(): string {
   if (import.meta.env.VITE_WS_URL) {
     return import.meta.env.VITE_WS_URL;
   }
-
+  // In production, use same host. In dev, use injected backend port with current hostname.
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = import.meta.env.VITE_BACKEND_PORT
-    ? `${window.location.hostname}:${import.meta.env.VITE_BACKEND_PORT}`
-    : window.location.host;
-
-  return `${protocol}//${host}`;
+  const backendPort = import.meta.env.VITE_BACKEND_PORT;
+  if (backendPort) {
+    return `${protocol}//${window.location.hostname}:${backendPort}`;
+  }
+  return `${protocol}//${window.location.host}`;
 }
 
 const WS_URL = getWsUrl();
 
-type RoundResult = "player1" | "player2" | "tie";
-
 /**
- * Normalize round result so player1 always refers to "me" (the current client).
- * Flips the result when we're player2.
+ * Normalize round result so player1 always refers to "me" (the current client)
  */
-function normalizeRoundResult(result: RoundResult, isPlayer1: boolean): RoundResult {
-  if (result === "tie" || isPlayer1) {
+function normalizeRoundResult(
+  result: "player1" | "player2" | "tie",
+  isPlayer1: boolean
+): "player1" | "player2" | "tie" {
+  if (result === "tie") {
+    return "tie";
+  }
+  if (isPlayer1) {
     return result;
   }
+  // Flip the result when we're player2
   return result === "player1" ? "player2" : "player1";
 }
 
@@ -74,6 +78,7 @@ export function useGameSocket(
   const queryClientRef = useRef(queryClient);
 
   const handleMessage = useCallback(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message dispatcher handles many message types
     (message: ServerMessage) => {
       switch (message.type) {
         case "connected":
@@ -443,6 +448,7 @@ export function useGameSocket(
     onDisconnect: handleDisconnect,
   });
 
+  // Keep refs updated so message handler can use them
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
@@ -451,5 +457,12 @@ export function useGameSocket(
     queryClientRef.current = queryClient;
   }, [queryClient]);
 
-  return { send, connectionStatus, disconnect };
+  return useMemo(
+    () => ({
+      send,
+      connectionStatus,
+      disconnect,
+    }),
+    [send, connectionStatus, disconnect]
+  );
 }
