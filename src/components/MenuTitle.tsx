@@ -67,7 +67,7 @@ export function MenuTitle({
     <div
       className={cn(
         "flex flex-col gap-2",
-        align === "center" && "items-center justify-center",
+        align === "center" && "items-center justify-center text-center",
         className
       )}
     >

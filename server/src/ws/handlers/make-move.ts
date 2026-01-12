@@ -90,12 +90,8 @@ export function resolveRound(roomCode: string) {
 
   const result: RoundResultType = determineWinner(move1, move2);
 
-  let winnerId: string | null = null;
-  if (result === "player1") {
-    winnerId = player1Id;
-  } else if (result === "player2") {
-    winnerId = player2Id;
-  }
+  const winnerId =
+    result === "player1" ? player1Id : result === "player2" ? player2Id : null;
 
   if (winnerId) {
     room.scores[winnerId] = (room.scores[winnerId] || 0) + 1;
@@ -168,8 +164,10 @@ export function resolveRound(roomCode: string) {
   } else {
     // Reset for next round
     room.currentMoves = {};
-    // Restart shot clock for next round
-    startShotClock(roomCode);
+    // Delay shot clock start by 3 seconds to allow round result display
+    setTimeout(() => {
+      startShotClock(roomCode);
+    }, 3000);
   }
 }
 
@@ -193,16 +191,18 @@ function startShotClock(roomCode: string): void {
   });
 }
 
+const MOVES = ["rock", "paper", "scissors"] as const;
+
+function getRandomMove(): Move {
+  return MOVES[Math.floor(Math.random() * MOVES.length)];
+}
+
 function handleShotClockExpiry(roomCode: string): void {
   const room = rooms.get(roomCode);
   if (!room?.gameStarted) {
     return;
   }
 
-  const moves = ["rock", "paper", "scissors"] as const;
-  const getRandomMove = () => moves[Math.floor(Math.random() * 3)];
-
-  // Players who haven't moved get random move
   for (const playerId of room.players) {
     if (!room.currentMoves[playerId]) {
       room.currentMoves[playerId] = getRandomMove();

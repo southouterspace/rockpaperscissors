@@ -50,7 +50,7 @@ function MenuComponent() {
     <>
       <Layout>
         <LayoutHeader>
-          <MenuTitle description={`Hello, ${playerName}.`} title="Main Menu" />
+          <MenuTitle align="center" description={`Hello, ${playerName}.`} title="ROCK PAPER SCISSORS" />
         </LayoutHeader>
         <LayoutFooter>
           <Button

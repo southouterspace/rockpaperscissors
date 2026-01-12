@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWebSocketContext } from "@/providers/websocket-provider";
 import { useGameStore } from "@/stores/game-store";
-import { Button } from "./ui/8bit/button";
-import { Card } from "./ui/8bit/card";
+import { Button } from "@/components/ui/8bit/button";
+import { Card } from "@/components/ui/8bit/card";
 import {
   Drawer,
   DrawerClose,
@@ -11,26 +11,39 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
-} from "./ui/8bit/drawer";
+} from "@/components/ui/8bit/drawer";
 
 interface OnlineUsersDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  showInvite?: boolean;
 }
 
 export function OnlineUsersDrawer({
   open,
   onOpenChange,
+  showInvite = false,
 }: OnlineUsersDrawerProps) {
   const { send } = useWebSocketContext();
   const sessionId = useGameStore((state) => state.sessionId);
   const onlineUsers = useGameStore((state) => state.onlineUsers);
+  const [invitedUsers, setInvitedUsers] = useState<Set<string>>(new Set());
+
   // Request online users when drawer opens
   useEffect(() => {
     if (open) {
       send({ type: "getOnlineUsers" });
+      setInvitedUsers(new Set());
     }
   }, [open, send]);
+
+  const handleInvite = useCallback(
+    (userId: string) => {
+      send({ type: "invitePlayer", targetId: userId });
+      setInvitedUsers((prev) => new Set(prev).add(userId));
+    },
+    [send]
+  );
 
   // Filter out self and users already in games
   const availableUsers = onlineUsers.filter(
@@ -41,9 +54,9 @@ export function OnlineUsersDrawer({
     <Drawer onOpenChange={onOpenChange} open={open}>
       <DrawerContent>
         <DrawerHeader className="text-center">
-          <DrawerTitle>INVITE PLAYER</DrawerTitle>
+          <DrawerTitle>PLAYERS ONLINE</DrawerTitle>
           <DrawerDescription>
-            Select a player to invite to your game
+            {availableUsers.length} players online now
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-2 px-4 py-4">
@@ -58,6 +71,16 @@ export function OnlineUsersDrawer({
                 key={user.id}
               >
                 <span className="font-medium">{user.name}</span>
+                {showInvite && (
+                  <Button
+                    disabled={invitedUsers.has(user.id)}
+                    onClick={() => handleInvite(user.id)}
+                    size="sm"
+                    variant={invitedUsers.has(user.id) ? "secondary" : "default"}
+                  >
+                    {invitedUsers.has(user.id) ? "INVITED" : "INVITE"}
+                  </Button>
+                )}
               </Card>
             ))
           )}

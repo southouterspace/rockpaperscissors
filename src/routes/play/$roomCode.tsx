@@ -64,12 +64,25 @@ function GameRoomComponent() {
   const [lastMyMove, setLastMyMove] = useState<Move | null>(null);
   const [hasAttemptedJoin, setHasAttemptedJoin] = useState(false);
   const [lastOpponentMove, setLastOpponentMove] = useState<Move | null>(null);
+  const [waitingForRematch, setWaitingForRematch] = useState(false);
 
   // Calculate scores for display
   const myScore = playerId ? (scores[playerId] ?? 0) : 0;
   const opponentScore = Object.entries(scores)
     .filter(([id]) => id !== playerId)
     .reduce((sum, [, score]) => sum + score, 0);
+
+  // Determine my result for the round result dialog
+  function getMyRoundResult(): "win" | "lose" | "draw" | null {
+    if (!roundResult) {
+      return null;
+    }
+    if (roundResult.result === "tie") {
+      return "draw";
+    }
+    // player1 in roundResult is always "me" (set in use-game-socket)
+    return roundResult.result === "player1" ? "win" : "lose";
+  }
 
   // Determine if we're in active game mode
   const isInGame = currentScreen === "game";
@@ -79,42 +92,29 @@ function GameRoomComponent() {
   // Handle invite flow - if no player name, redirect to home with room code in URL
   useEffect(() => {
     if (!playerName) {
-      // Store room code in sessionStorage directly (not Zustand) to survive navigation
-      try {
-        sessionStorage.setItem("rps_invite_room", roomCode);
-      } catch {
-        // Storage not available
-      }
+      // Store room code in sessionStorage to survive navigation
+      sessionStorage.setItem("rps_invite_room", roomCode);
       navigate({ to: "/" });
     }
   }, [playerName, navigate, roomCode]);
 
   // Auto-join room if we have a name but aren't in this room yet
   useEffect(() => {
-    // Only auto-join if:
-    // - We have a player name
-    // - We're connected
-    // - We're not already in this room (storeRoomCode doesn't match URL)
-    // - We're not already marked as a player in a room
-    // - We haven't already attempted to join THIS specific room
-    if (
+    const shouldAutoJoin =
       playerName &&
       connectionStatus === "connected" &&
       storeRoomCode !== roomCode &&
       !isPlayer &&
-      !hasAttemptedJoin
-    ) {
-      setHasAttemptedJoin(true);
-      // Clear any stored invite room since we're joining now
-      try {
-        sessionStorage.removeItem("rps_invite_room");
-      } catch {
-        // Storage not available
-      }
-      // Send setName first to ensure server knows our name, then join
-      send({ type: "setName", name: playerName });
-      send({ type: "joinRoom", roomCode, asPlayer: true });
+      !hasAttemptedJoin;
+
+    if (!shouldAutoJoin) {
+      return;
     }
+
+    setHasAttemptedJoin(true);
+    sessionStorage.removeItem("rps_invite_room");
+    send({ type: "setName", name: playerName });
+    send({ type: "joinRoom", roomCode, asPlayer: true });
   }, [
     playerName,
     connectionStatus,
@@ -125,19 +125,27 @@ function GameRoomComponent() {
     send,
   ]);
 
-  // Auto-send readyToPlay when both players are in the room and game hasn't started
+  // Reset waiting state when game starts
   useEffect(() => {
-    if (opponentName && currentScreen === "lobby" && !gameStarted) {
-      send({ type: "readyToPlay" });
+    if (gameStarted) {
+      setWaitingForRematch(false);
+      setMatchResult(null);
     }
-  }, [opponentName, currentScreen, gameStarted, send]);
+  }, [gameStarted, setMatchResult]);
 
-  // Show round result dialog when roundResult changes
+  // Show round result dialog when roundResult changes (but not if match ended)
   useEffect(() => {
-    if (roundResult) {
+    if (roundResult && !isMatchEnd) {
       setShowRoundResult(true);
     }
-  }, [roundResult]);
+  }, [roundResult, isMatchEnd]);
+
+  // Auto-close round result dialog when match ends
+  useEffect(() => {
+    if (isMatchEnd) {
+      setShowRoundResult(false);
+    }
+  }, [isMatchEnd]);
 
   const handleMoveSelect = useCallback(
     (move: Move) => {
@@ -180,25 +188,8 @@ function GameRoomComponent() {
 
   const handlePlayAgain = useCallback(() => {
     send({ type: "restartMatch" });
-    setMatchResult(null);
-  }, [send, setMatchResult]);
-
-  const handleReturnToLobby = useCallback(() => {
-    send({ type: "returnToLobby" });
-    setMatchResult(null);
-  }, [send, setMatchResult]);
-
-  // Determine my result for the round result dialog
-  function getMyRoundResult(): "win" | "lose" | "draw" | null {
-    if (!roundResult) {
-      return null;
-    }
-    if (roundResult.result === "tie") {
-      return "draw";
-    }
-    // player1 in roundResult is always "me" (set in use-game-socket)
-    return roundResult.result === "player1" ? "win" : "lose";
-  }
+    setWaitingForRematch(true);
+  }, [send]);
 
   // Show loading while redirecting if no player name
   if (!playerName) {
@@ -218,13 +209,9 @@ function GameRoomComponent() {
             <Badge>{roomCode}</Badge>
           </LayoutHeader>
           <CardContent className="flex flex-1 flex-col items-center justify-center gap-2">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-lg">{playerName || "Player"}</p>
-              <p className="text-muted-foreground">VS</p>
-              <p className="text-lg text-muted-foreground">
-                WAITING FOR OPPONENT...
-              </p>
-            </div>
+            <p className="text-lg text-muted-foreground">
+              WAITING FOR OPPONENT...
+            </p>
           </CardContent>
           <LayoutFooter>
             {isHost && (
@@ -247,6 +234,7 @@ function GameRoomComponent() {
         <OnlineUsersDrawer
           onOpenChange={setShowInviteDrawer}
           open={showInviteDrawer}
+          showInvite
         />
       </>
     );
@@ -308,14 +296,13 @@ function GameRoomComponent() {
 
       {/* Match End Dialog */}
       <MatchEndDialog
-        isForfeit={matchResult?.isForfeit}
         isWinner={matchResult?.winnerId === playerId}
-        onLeave={handleLeaveRoom}
+        onBackToLobby={handleLeaveRoom}
         onPlayAgain={handlePlayAgain}
-        onReturnToLobby={handleReturnToLobby}
         open={isMatchEnd}
         opponentScore={opponentScore}
         playerScore={myScore}
+        waitingForOpponent={waitingForRematch}
         winnerName={matchResult?.winnerName ?? null}
       />
     </>

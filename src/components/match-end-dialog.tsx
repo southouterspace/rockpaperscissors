@@ -14,9 +14,8 @@ interface MatchEndDialogProps {
   playerScore: number;
   opponentScore: number;
   onPlayAgain: () => void;
-  onLeave: () => void;
-  onReturnToLobby: () => void;
-  isForfeit?: boolean;
+  onBackToLobby: () => void;
+  waitingForOpponent?: boolean;
 }
 
 export function MatchEndDialog({
@@ -26,27 +25,26 @@ export function MatchEndDialog({
   playerScore,
   opponentScore,
   onPlayAgain,
-  onLeave,
-  onReturnToLobby,
-  isForfeit = false,
+  onBackToLobby,
+  waitingForOpponent = false,
 }: MatchEndDialogProps) {
-  const title = isWinner ? "VICTORY!" : "GAME OVER";
-  const message = isWinner
-    ? "Congratulations! You won the match!"
-    : `${winnerName || "Opponent"} wins the match!`;
-  const titleColor = isWinner ? "text-green-500" : "text-red-500";
-
   return (
     <Dialog open={open}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className={`text-center text-3xl ${titleColor}`}>
-            {title}
+          <DialogTitle
+            className={`text-center text-3xl ${isWinner ? "text-green-500" : "text-red-500"}`}
+          >
+            {isWinner ? "VICTORY!" : "GAME OVER"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-2 py-4">
-          <p className="text-center text-lg">{message}</p>
+          <p className="text-center text-lg">
+            {isWinner
+              ? "Congratulations! You won the match!"
+              : `${winnerName || "Opponent"} wins the match!`}
+          </p>
 
           <div className="flex items-center gap-4">
             <span className="font-bold text-4xl">{playerScore}</span>
@@ -55,20 +53,21 @@ export function MatchEndDialog({
           </div>
         </div>
 
-        <DialogFooter className="flex gap-2 sm:justify-center">
-          {!isForfeit && (
-            <Button onClick={onPlayAgain} variant="default">
-              PLAY AGAIN
-            </Button>
+        <DialogFooter className="flex flex-col gap-2 sm:justify-center">
+          {waitingForOpponent ? (
+            <p className="text-center text-muted-foreground">
+              WAITING FOR OPPONENT...
+            </p>
+          ) : (
+            <>
+              <Button className="w-full" onClick={onPlayAgain} variant="default">
+                PLAY AGAIN
+              </Button>
+              <Button className="w-full" onClick={onBackToLobby} variant="outline">
+                BACK TO LOBBY
+              </Button>
+            </>
           )}
-          {isForfeit && (
-            <Button onClick={onReturnToLobby} variant="default">
-              REMATCH
-            </Button>
-          )}
-          <Button onClick={onLeave} variant="outline">
-            LEAVE
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

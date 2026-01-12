@@ -37,28 +37,8 @@ function HomeComponent() {
   const isNameValid = name.trim().length >= 1 && name.trim().length <= 20;
   const isConnected = connectionStatus === "connected";
 
-  // Redirect returning players to menu (or pending room if they were invited)
-  useEffect(() => {
-    if (storedPlayerName && isConnected) {
-      send({ type: "setName", name: storedPlayerName });
-      const inviteRoom = getInviteRoom();
-      if (inviteRoom) {
-        clearInviteRoom();
-        navigate({ to: "/play/$roomCode", params: { roomCode: inviteRoom } });
-      } else {
-        navigate({ to: "/menu" });
-      }
-    }
-  }, [storedPlayerName, isConnected, navigate, send]);
-
-  function handleContinue() {
-    if (!(isNameValid && isConnected)) {
-      return;
-    }
-    const trimmedName = name.trim();
-    setPlayerName(trimmedName);
-    send({ type: "setName", name: trimmedName });
-    // Navigate to pending room if invited, otherwise to menu
+  function navigateAfterAuth(playerName: string): void {
+    send({ type: "setName", name: playerName });
     const inviteRoom = getInviteRoom();
     if (inviteRoom) {
       clearInviteRoom();
@@ -66,6 +46,22 @@ function HomeComponent() {
     } else {
       navigate({ to: "/menu" });
     }
+  }
+
+  // Redirect returning players to menu (or pending room if they were invited)
+  useEffect(() => {
+    if (storedPlayerName && isConnected) {
+      navigateAfterAuth(storedPlayerName);
+    }
+  }, [storedPlayerName, isConnected]);
+
+  function handleContinue(): void {
+    if (!(isNameValid && isConnected)) {
+      return;
+    }
+    const trimmedName = name.trim();
+    setPlayerName(trimmedName);
+    navigateAfterAuth(trimmedName);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -85,8 +81,8 @@ function HomeComponent() {
 
   return (
     <Layout>
-      <LayoutHeader>
-        <MenuTitle title="ROCK PAPER SCISSORS" />
+      <LayoutHeader className="flex-1">
+        <MenuTitle align="center" title="ROCK PAPER SCISSORS" />
       </LayoutHeader>
       <LayoutFooter className="gap-2">
         <div className="flex w-full flex-col gap-2">
@@ -110,6 +106,17 @@ function HomeComponent() {
           onClick={handleContinue}
         >
           CONTINUE
+        </Button>
+        <Button
+          className="w-[calc(100%-12px)]"
+          onClick={() => {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.reload();
+          }}
+          variant="outline"
+        >
+          CLEAR CACHE
         </Button>
         {connectionStatus === "connecting" && (
           <p className="text-center text-muted-foreground text-sm">

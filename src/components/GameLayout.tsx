@@ -4,6 +4,7 @@ import { MenuTitle } from "@/components/MenuTitle";
 import { RoundResult } from "@/components/RoundResult";
 import { Scoreboard } from "@/components/ScoreBoard";
 import { ShotClock } from "@/components/ShotClock";
+import { Button } from "@/components/ui/8bit/button";
 import type { Move } from "@/types/messages";
 
 interface GameLayoutProps {
@@ -77,7 +78,7 @@ export function GameLayout({
       </LayoutHeader>
 
       <div className="flex flex-1 flex-col gap-2 px-4">
-        {shotClockDuration > 0 && (
+        {shotClockDuration > 0 ? (
           <ShotClock
             duration={shotClockDuration}
             onExpire={onShotClockExpire}
@@ -85,6 +86,12 @@ export function GameLayout({
             paused={shotClockPaused}
             resetKey={shotClockResetKey}
           />
+        ) : (
+          <div className="flex justify-end">
+            <Button onClick={onQuit} size="sm" variant="outline">
+              QUIT
+            </Button>
+          </div>
         )}
 
         <Scoreboard
