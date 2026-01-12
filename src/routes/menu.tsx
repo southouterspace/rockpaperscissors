@@ -63,7 +63,7 @@ function MenuComponent() {
             className="w-[calc(100%-12px)]"
             onClick={() => setIsSoloDrawerOpen(true)}
           >
-            SOLO
+            VS COMPUTER
           </Button>
           <Button
             className="w-[calc(100%-12px)]"
@@ -81,7 +81,7 @@ function MenuComponent() {
         open={isSoloDrawerOpen}
         showPrivateToggle={false}
         submitLabel="START"
-        title="SOLO PLAY"
+        title="VS COMPUTER"
       />
     </>
   );

@@ -7,6 +7,7 @@ import "./styles/retro.css";
 interface ToastOptions {
   title?: string;
   description?: string;
+  variant?: "default" | "destructive";
 }
 
 export function toast(options: ToastOptions | string) {

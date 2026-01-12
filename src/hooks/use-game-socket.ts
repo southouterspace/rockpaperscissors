@@ -30,6 +30,23 @@ function getWsUrl(): string {
 
 const WS_URL = getWsUrl();
 
+/**
+ * Normalize round result so player1 always refers to "me" (the current client)
+ */
+function normalizeRoundResult(
+  result: "player1" | "player2" | "tie",
+  isPlayer1: boolean
+): "player1" | "player2" | "tie" {
+  if (result === "tie") {
+    return "tie";
+  }
+  if (isPlayer1) {
+    return result;
+  }
+  // Flip the result when we're player2
+  return result === "player1" ? "player2" : "player1";
+}
+
 export function useGameSocket(
   options: UseGameSocketOptions = {}
 ): UseGameSocketReturn {
@@ -156,26 +173,8 @@ export function useGameSocket(
           // Determine which player is "me" based on playerId
           const isPlayer1 = message.player1.id === playerId;
 
-          // Determine my result from this round
-          let myResultValue: "win" | "lose" | "draw";
-          if (message.result === "tie") {
-            myResultValue = "draw";
-          } else if ((message.result === "player1") === isPlayer1) {
-            myResultValue = "win";
-          } else {
-            myResultValue = "lose";
-          }
-
-          // Determine the result type for the store
-          let resultForStore: "player1" | "player2" | "tie";
-          if (myResultValue === "draw") {
-            resultForStore = "tie";
-          } else if (isPlayer1) {
-            resultForStore = message.result;
-          } else {
-            resultForStore =
-              message.result === "player1" ? "player2" : "player1";
-          }
+          // Normalize result so player1 is always "me" in the store
+          const resultForStore = normalizeRoundResult(message.result, isPlayer1);
 
           // player1 in our result is always "me"
           const myPlayer = isPlayer1 ? message.player1 : message.player2;
@@ -230,6 +229,12 @@ export function useGameSocket(
 
         case "error":
           console.error("Server error:", message.message);
+          // Room not found - silently redirect to lobby
+          if (message.message === "Room not found") {
+            leaveRoom();
+            setScreen("lobby");
+            break;
+          }
           toast({
             title: "Error",
             description: message.message,

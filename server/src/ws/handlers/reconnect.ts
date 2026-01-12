@@ -1,8 +1,4 @@
-import type {
-  Player,
-  RoomState,
-  ServerMessage,
-} from "@rps/shared/types/messages";
+import type { RoomState, ServerMessage } from "@rps/shared/types/messages";
 import type { ServerWebSocket } from "bun";
 import {
   clients,
@@ -11,65 +7,7 @@ import {
   sessions,
   type WebSocketData,
 } from "../state";
-
-function send(ws: ServerWebSocket<WebSocketData>, message: ServerMessage) {
-  ws.send(JSON.stringify(message));
-}
-
-function getClientBySessionId(sessionId: string) {
-  for (const client of clients.values()) {
-    if (client.sessionId === sessionId) {
-      return client;
-    }
-  }
-  return null;
-}
-
-function getRoomState(roomCode: string): RoomState | null {
-  const room = rooms.get(roomCode);
-  if (!room) {
-    return null;
-  }
-
-  const timeoutsRemaining: Record<string, number> = {};
-  for (const playerId of room.players) {
-    timeoutsRemaining[playerId] = room.timeoutsUsed[playerId] ? 0 : 1;
-  }
-
-  let activeTimeout: { playerId: string; secondsRemaining: number } | null =
-    null;
-  if (room.activeTimeout) {
-    const secondsRemaining = Math.max(
-      0,
-      Math.ceil((room.activeTimeout.endsAt - Date.now()) / 1000)
-    );
-    activeTimeout = {
-      playerId: room.activeTimeout.playerId,
-      secondsRemaining,
-    };
-  }
-
-  return {
-    roomCode: room.roomCode,
-    hostId: room.hostId,
-    players: room.players.map((id): Player => {
-      const client = getClientBySessionId(id);
-      return { id, name: client?.name || "Unknown" };
-    }),
-    watchers: room.watchers.map((id): Player => {
-      const client = getClientBySessionId(id);
-      return { id, name: client?.name || "Unknown" };
-    }),
-    settings: room.settings,
-    currentRound: room.currentRound,
-    gameStarted: room.gameStarted,
-    matchWinner: room.matchWinner,
-    scores: { ...room.scores },
-    readyPlayers: Array.from(room.readyPlayers),
-    timeoutsRemaining,
-    activeTimeout,
-  };
-}
+import { getRoomState, send } from "../utils";
 
 export function handleReconnect(
   ws: ServerWebSocket<WebSocketData>,

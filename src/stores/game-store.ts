@@ -203,12 +203,11 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
 
   updateRoomState: (roomState) =>
-    set((state) => ({
-      ...state,
-      ...(roomState.roomCode && { roomCode: roomState.roomCode }),
-      ...(roomState.currentRound && { currentRound: roomState.currentRound }),
-      ...(roomState.scores && { scores: roomState.scores }),
-    })),
+    set({
+      ...(roomState.roomCode !== undefined && { roomCode: roomState.roomCode }),
+      ...(roomState.currentRound !== undefined && { currentRound: roomState.currentRound }),
+      ...(roomState.scores !== undefined && { scores: roomState.scores }),
+    }),
 
   // Game actions
   setMyMove: (move) => set({ myMove: move }),

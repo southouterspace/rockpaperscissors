@@ -1,20 +1,7 @@
-import type { ServerMessage } from "@rps/shared/types/messages";
 import type { ServerWebSocket } from "bun";
 import { broadcastOnlineUsers } from "../broadcast";
 import { clients, rooms, type WebSocketData } from "../state";
-
-function send(ws: ServerWebSocket<WebSocketData>, message: ServerMessage) {
-  ws.send(JSON.stringify(message));
-}
-
-function getClientBySessionId(sessionId: string) {
-  for (const client of clients.values()) {
-    if (client.sessionId === sessionId) {
-      return client;
-    }
-  }
-  return null;
-}
+import { getClientBySessionId, send } from "../utils";
 
 function getPlayerPendingInvitation(playerId: string): string | undefined {
   for (const room of rooms.values()) {
@@ -35,6 +22,13 @@ export function handleInvitePlayer(
   }
 
   const playerId = client.sessionId;
+
+  // GUARD: Prevent self-invitation - cannot invite yourself to your own room
+  if (targetId === playerId) {
+    send(ws, { type: "error", message: "Cannot invite yourself" });
+    return;
+  }
+
   const targetClient = getClientBySessionId(targetId);
 
   if (!targetClient) {

@@ -59,7 +59,7 @@ export function GameSetupDrawer({
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <label className="text-sm" htmlFor="first-to">
-                FIRST TO
+                NUMBER OF LIVES
               </label>
               <span className="font-bold text-sm">{winsNeeded}</span>
             </div>
