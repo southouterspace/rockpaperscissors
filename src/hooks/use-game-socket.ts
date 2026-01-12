@@ -53,6 +53,7 @@ export function useGameSocket(
     setMatchResult,
     setOnlineUsers,
     setPendingInvitation,
+    setGameStarted,
   } = useGameStore();
 
   const sendRef = useRef<((message: ClientMessage) => void) | null>(null);
@@ -106,13 +107,19 @@ export function useGameSocket(
             message.settings.winsNeeded,
             message.settings.shotClock
           );
+          setGameStarted(message.gameStarted);
           // Find opponent name if we're a player
           if (isPlayerInGame) {
             const opponent = message.players.find((p) => p.id !== playerId);
             if (opponent) {
               setOpponentName(opponent.name);
             }
-            setScreen("lobby");
+            // If game is in progress, go directly to game screen
+            if (message.gameStarted) {
+              setScreen("game");
+            } else {
+              setScreen("lobby");
+            }
           } else {
             // Joined as watcher - show error and redirect
             toast({
@@ -128,6 +135,7 @@ export function useGameSocket(
 
         case "gameStarted": {
           setScreen("game");
+          setGameStarted(true);
           setMyMove(null);
           setRoundResult(null);
           setCurrentRound(message.currentRound);
@@ -188,6 +196,7 @@ export function useGameSocket(
             isForfeit: false,
           });
           updateScores(message.scores);
+          setGameStarted(false);
           setScreen("matchEnd");
           break;
 
@@ -198,6 +207,7 @@ export function useGameSocket(
             isForfeit: true,
           });
           updateScores(message.scores);
+          setGameStarted(false);
           setScreen("matchEnd");
           toast({
             title:
@@ -251,13 +261,13 @@ export function useGameSocket(
         }
 
         case "playerPromoted":
-        case "returnedToLobby":
           updateRoomState({
             currentRound: message.currentRound,
             scores: message.scores,
           });
           break;
 
+        case "returnedToLobby":
         case "matchReset":
           updateRoomState({
             currentRound: message.currentRound,
@@ -266,6 +276,7 @@ export function useGameSocket(
           setMatchResult(null);
           setRoundResult(null);
           setMyMove(null);
+          setGameStarted(false);
           setScreen("lobby");
           break;
 
@@ -285,6 +296,7 @@ export function useGameSocket(
               currentRound: message.currentRound,
               scores: message.scores,
             });
+            setGameStarted(message.gameInProgress ?? false);
             if (message.gameInProgress) {
               setScreen("game");
             } else {
@@ -398,6 +410,7 @@ export function useGameSocket(
       setMatchResult,
       setOnlineUsers,
       setPendingInvitation,
+      setGameStarted,
     ]
   );
 

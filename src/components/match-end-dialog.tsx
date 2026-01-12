@@ -15,6 +15,7 @@ interface MatchEndDialogProps {
   opponentScore: number;
   onPlayAgain: () => void;
   onLeave: () => void;
+  onReturnToLobby: () => void;
   isForfeit?: boolean;
 }
 
@@ -26,6 +27,7 @@ export function MatchEndDialog({
   opponentScore,
   onPlayAgain,
   onLeave,
+  onReturnToLobby,
   isForfeit = false,
 }: MatchEndDialogProps) {
   const title = isWinner ? "VICTORY!" : "GAME OVER";
@@ -59,8 +61,13 @@ export function MatchEndDialog({
               PLAY AGAIN
             </Button>
           )}
-          <Button onClick={onLeave} variant={isForfeit ? "default" : "outline"}>
-            {isForfeit ? "BACK TO LOBBY" : "LEAVE"}
+          {isForfeit && (
+            <Button onClick={onReturnToLobby} variant="default">
+              REMATCH
+            </Button>
+          )}
+          <Button onClick={onLeave} variant="outline">
+            LEAVE
           </Button>
         </DialogFooter>
       </DialogContent>

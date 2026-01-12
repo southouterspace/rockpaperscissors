@@ -54,6 +54,7 @@ function GameRoomComponent() {
   // Check if we're in this room already
   const storeRoomCode = useGameStore((state) => state.roomCode);
   const isPlayer = useGameStore((state) => state.isPlayer);
+  const gameStarted = useGameStore((state) => state.gameStarted);
   const { connectionStatus } = useWebSocketContext();
 
   // Local state
@@ -124,12 +125,12 @@ function GameRoomComponent() {
     send,
   ]);
 
-  // Auto-send readyToPlay when both players are in the room
+  // Auto-send readyToPlay when both players are in the room and game hasn't started
   useEffect(() => {
-    if (opponentName && currentScreen === "lobby") {
+    if (opponentName && currentScreen === "lobby" && !gameStarted) {
       send({ type: "readyToPlay" });
     }
-  }, [opponentName, currentScreen, send]);
+  }, [opponentName, currentScreen, gameStarted, send]);
 
   // Show round result dialog when roundResult changes
   useEffect(() => {
@@ -179,6 +180,11 @@ function GameRoomComponent() {
 
   const handlePlayAgain = useCallback(() => {
     send({ type: "restartMatch" });
+    setMatchResult(null);
+  }, [send, setMatchResult]);
+
+  const handleReturnToLobby = useCallback(() => {
+    send({ type: "returnToLobby" });
     setMatchResult(null);
   }, [send, setMatchResult]);
 
@@ -268,7 +274,7 @@ function GameRoomComponent() {
         roundResultPlayer2Move={roundResult?.player2Move ?? null}
         selectedMove={myMove}
         shotClockDuration={isInGame ? shotClockDuration : 0}
-        shotClockPaused={myMove !== null}
+        shotClockPaused={myMove !== null || showRoundResult}
         shotClockResetKey={currentRound}
         showRoundResult={showRoundResult}
         winsNeeded={winsNeeded}
@@ -306,6 +312,7 @@ function GameRoomComponent() {
         isWinner={matchResult?.winnerId === playerId}
         onLeave={handleLeaveRoom}
         onPlayAgain={handlePlayAgain}
+        onReturnToLobby={handleReturnToLobby}
         open={isMatchEnd}
         opponentScore={opponentScore}
         playerScore={myScore}

@@ -1,0 +1,13 @@
+{
+  "name": "@rps/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./types/game": "./types/game.ts",
+    "./types/messages": "./types/messages.ts",
+    "./logic/*": "./logic/*.ts"
+  }
+}

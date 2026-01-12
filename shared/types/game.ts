@@ -1,3 +1,5 @@
+// shared/types/game.ts
+
 import type { Move, RoundResultType } from "./messages";
 
 export interface RoundResult {
@@ -26,7 +28,6 @@ export interface GameState {
   roomCode: string | null;
   isHost: boolean;
   isPlayer: boolean;
-  gameStarted: boolean;
 
   // Current screen
   currentScreen: ScreenName;
@@ -90,7 +91,6 @@ export const INITIAL_GAME_STATE: GameState = {
   roomCode: null,
   isHost: false,
   isPlayer: false,
-  gameStarted: false,
   currentScreen: "name",
   currentRound: 1,
   scores: {},

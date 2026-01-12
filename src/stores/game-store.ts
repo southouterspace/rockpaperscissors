@@ -109,6 +109,7 @@ interface GameStore extends GameState {
   setRoundResult: (result: RoundResult | null) => void;
   setMatchResult: (result: MatchResult | null) => void;
   setHasPasskey: (hasPasskey: boolean) => void;
+  setGameStarted: (started: boolean) => void;
 
   // Actions - Solo
   setSoloGame: (soloGame: SoloGameState | null) => void;
@@ -168,6 +169,7 @@ export const useGameStore = create<GameStore>((set) => ({
       roomCode: null,
       isHost: false,
       isPlayer: false,
+      gameStarted: false,
       currentRound: 1,
       scores: {},
       myMove: null,
@@ -203,6 +205,8 @@ export const useGameStore = create<GameStore>((set) => ({
   setMatchResult: (result) => set({ matchResult: result }),
 
   setHasPasskey: (hasPasskey) => set({ hasPasskey }),
+
+  setGameStarted: (started) => set({ gameStarted: started }),
 
   // Solo actions
   setSoloGame: (soloGame) => set({ soloGame }),
