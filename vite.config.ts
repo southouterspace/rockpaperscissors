@@ -30,9 +30,12 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    define: {
-      "import.meta.env.VITE_BACKEND_PORT": JSON.stringify(backendPort),
-    },
+    // Only inject backend port in development - production uses same host
+    ...(mode === "development" && {
+      define: {
+        "import.meta.env.VITE_BACKEND_PORT": JSON.stringify(backendPort),
+      },
+    }),
     server: {
       port: 5173,
       strictPort: true,
