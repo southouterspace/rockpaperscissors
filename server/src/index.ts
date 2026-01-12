@@ -74,7 +74,7 @@ const server = Bun.serve({
 
 // Write port to file for dev tooling (vite proxy)
 if (isDev) {
-  const portFile = resolve(import.meta.dir, "../../../.dev-server-port");
+  const portFile = resolve(import.meta.dir, "../../.dev-server-port");
   Bun.write(portFile, String(server.port));
 }
 

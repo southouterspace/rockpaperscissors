@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/8bit/toast";
 import { queryClient } from "@/lib/query-client";
 import { WebSocketProvider } from "@/providers/websocket-provider";
 

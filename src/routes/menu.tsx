@@ -70,7 +70,7 @@ function MenuComponent() {
             disabled
             variant="secondary"
           >
-            LEADERBOARD (COMING SOON)
+            LEADERBOARD
           </Button>
         </LayoutFooter>
       </Layout>

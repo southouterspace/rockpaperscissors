@@ -106,20 +106,20 @@ export function GameSetupDrawer({
           )}
         </div>
 
-        <DrawerFooter className="flex-col gap-2">
+        <DrawerFooter className="flex-row gap-2">
           <Button
-            className="w-[calc(100%-12px)]"
-            disabled={disabled}
-            onClick={handleSubmit}
-          >
-            {submitLabel}
-          </Button>
-          <Button
-            className="w-[calc(100%-12px)]"
+            className="flex-1"
             onClick={handleBack}
             variant="outline"
           >
             BACK
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={disabled}
+            onClick={handleSubmit}
+          >
+            {submitLabel}
           </Button>
         </DrawerFooter>
       </DrawerContent>

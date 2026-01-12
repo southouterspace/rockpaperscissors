@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { GameRooms } from "@/components/GameRooms";
 import { CreateRoomDialog } from "@/components/GameSetup";
 import { Layout, LayoutFooter, LayoutHeader } from "@/components/Layout";
+import { OnlineUsersDrawer } from "@/components/OnlineUsersDrawer";
 import { PageTitle } from "@/components/PageTitle";
+import { UserIcon } from "@/components/UserIcon";
 import { Button } from "@/components/ui/8bit/button";
 import { CardContent } from "@/components/ui/8bit/card";
 import {
@@ -31,8 +33,11 @@ function LobbyComponent() {
   const navigate = useNavigate();
   const roomCode = useGameStore((state) => state.roomCode);
   const playerName = useGameStore((state) => state.playerName);
+  const onlineUsers = useGameStore((state) => state.onlineUsers);
+  const sessionId = useGameStore((state) => state.sessionId);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isJoinDrawerOpen, setIsJoinDrawerOpen] = useState(false);
+  const [isUsersDrawerOpen, setIsUsersDrawerOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
   // Track the initial roomCode on mount to avoid navigating if already set
@@ -51,6 +56,15 @@ function LobbyComponent() {
       navigate({ to: "/play/$roomCode", params: { roomCode } });
     }
   }, [roomCode, navigate]);
+
+  // Fetch online users on mount and periodically
+  useEffect(() => {
+    send({ type: "getOnlineUsers" });
+    const interval = setInterval(() => {
+      send({ type: "getOnlineUsers" });
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [send]);
 
   // Show loading while redirecting
   if (!playerName) {
@@ -94,21 +108,29 @@ function LobbyComponent() {
     <>
       <Layout>
         <LayoutHeader className="flex-row items-center justify-between">
-          <PageTitle title="LOBBY" />
+          <PageTitle
+            actions={
+              <Button
+                onClick={() => setIsUsersDrawerOpen(true)}
+                size="sm"
+                variant="outline"
+              >
+                <UserIcon size={14} />
+                <span className="ml-1">{onlineUsers.filter((u) => u.id !== sessionId).length}</span>
+              </Button>
+            }
+            title="LOBBY"
+          />
         </LayoutHeader>
         <CardContent className="flex flex-1 flex-col gap-4">
           <GameRooms onJoinRoom={handleJoinRoomFromList} />
         </CardContent>
-        <LayoutFooter>
-          <Button className="w-full" onClick={handleCreateRoom}>
-            NEW GAME
+        <LayoutFooter className="flex-row gap-2">
+          <Button className="flex-1" onClick={handleOpenJoinDrawer} variant="outline">
+            JOIN
           </Button>
-          <Button
-            className="w-full"
-            onClick={handleOpenJoinDrawer}
-            variant="outline"
-          >
-            JOIN GAME
+          <Button className="flex-1" onClick={handleCreateRoom}>
+            NEW
           </Button>
         </LayoutFooter>
       </Layout>
@@ -150,6 +172,11 @@ function LobbyComponent() {
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      <OnlineUsersDrawer
+        onOpenChange={setIsUsersDrawerOpen}
+        open={isUsersDrawerOpen}
+      />
     </>
   );
 }

@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/8bit/dialog";
 import { Spinner } from "@/components/ui/8bit/spinner";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/8bit/toast";
 import { registerPasskey } from "@/lib/passkeys";
 import { useGameStore } from "@/stores/game-store";
 

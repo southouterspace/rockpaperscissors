@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/8bit/toast";
 import { useGameStore } from "@/stores/game-store";
 import type { ClientMessage, ServerMessage } from "@/types/messages";
 import { type ConnectionStatus, useWebSocket } from "./use-websocket";
