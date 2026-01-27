@@ -1,9 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/8bit/toast";
 import { useGameStore } from "@/stores/game-store";
 import type { ClientMessage, ServerMessage } from "@/types/messages";
-import { type ConnectionStatus, useWebSocket } from "./use-websocket";
+import type { ConnectionStatus } from "./use-websocket";
 
 interface UseGameSocketOptions {
   queryClient?: QueryClient;
@@ -15,11 +15,56 @@ interface UseGameSocketReturn {
   disconnect: () => void;
 }
 
-function getWsUrl(): string {
-  if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL;
+// ---------------------------------------------------------------------------
+// Message routing: which socket handles which outgoing message type
+// ---------------------------------------------------------------------------
+
+const LOBBY_MESSAGE_TYPES = new Set<ClientMessage["type"]>([
+  "setName",
+  "getOnlineUsers",
+  "getPublicRooms",
+  "getNewSession",
+  "reconnect",
+  "createRoom",
+  "joinRoom",
+  "invitePlayer",
+  "inviteWatcher",
+  "acceptInvitation",
+  "declineInvitation",
+  "cancelInvitation",
+]);
+
+const GAME_MESSAGE_TYPES = new Set<ClientMessage["type"]>([
+  "makeMove",
+  "readyToPlay",
+  "requestToPlay",
+  "forfeitGame",
+  "callTimeout",
+  "leaveRoom",
+  "returnToLobby",
+  "restartMatch",
+  "promoteToPlayer",
+  "updateRoomSettings",
+]);
+
+// ---------------------------------------------------------------------------
+// WebSocket base URL helper
+// ---------------------------------------------------------------------------
+
+function getWsBase(): string {
+  // Prefer explicit backend URL (works for both dev and Cloudflare Workers prod)
+  if (import.meta.env.VITE_BACKEND_URL) {
+    const url = import.meta.env.VITE_BACKEND_URL as string;
+    // Convert http(s) to ws(s) if needed
+    return url.replace(/^http/, "ws");
   }
-  // In production, use same host. In dev, use injected backend port with current hostname.
+
+  // Legacy: VITE_WS_URL for backwards compat
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL as string;
+  }
+
+  // Derive from current host
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const backendPort = import.meta.env.VITE_BACKEND_PORT;
   if (backendPort) {
@@ -28,24 +73,119 @@ function getWsUrl(): string {
   return `${protocol}//${window.location.host}`;
 }
 
-const WS_URL = getWsUrl();
+const WS_BASE = getWsBase();
 
-/**
- * Normalize round result so player1 always refers to "me" (the current client)
- */
+// ---------------------------------------------------------------------------
+// Low-level managed WebSocket with reconnection
+// ---------------------------------------------------------------------------
+
+const INITIAL_RETRY_DELAY = 1000;
+const MAX_RETRIES = 5;
+
+interface ManagedSocket {
+  ws: WebSocket | null;
+  connect: () => void;
+  disconnect: () => void;
+  send: (data: string) => void;
+  isOpen: () => boolean;
+}
+
+function createManagedSocket(
+  urlFn: () => string,
+  onMessage: (msg: ServerMessage) => void,
+  onStatusChange: (status: ConnectionStatus) => void,
+  onDisconnect?: () => void,
+): ManagedSocket {
+  let ws: WebSocket | null = null;
+  let retryCount = 0;
+  let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+  let shouldReconnect = true;
+
+  function clearRetry() {
+    if (retryTimeout) {
+      clearTimeout(retryTimeout);
+      retryTimeout = null;
+    }
+  }
+
+  function connect() {
+    if (ws?.readyState === WebSocket.OPEN) return;
+    clearRetry();
+    shouldReconnect = true;
+    onStatusChange("connecting");
+
+    const socket = new WebSocket(urlFn());
+    ws = socket;
+
+    socket.onopen = () => {
+      retryCount = 0;
+      onStatusChange("connected");
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as ServerMessage;
+        onMessage(message);
+      } catch {
+        console.error("Failed to parse WebSocket message:", event.data);
+      }
+    };
+
+    socket.onclose = () => {
+      onStatusChange("disconnected");
+      onDisconnect?.();
+
+      if (shouldReconnect && retryCount < MAX_RETRIES) {
+        const delay = INITIAL_RETRY_DELAY * 2 ** retryCount;
+        retryCount += 1;
+        retryTimeout = setTimeout(connect, delay);
+      }
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+  }
+
+  function disconnect() {
+    shouldReconnect = false;
+    clearRetry();
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+    onStatusChange("disconnected");
+  }
+
+  function send(data: string) {
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(data);
+    }
+  }
+
+  function isOpen() {
+    return ws?.readyState === WebSocket.OPEN;
+  }
+
+  return { get ws() { return ws; }, connect, disconnect, send, isOpen };
+}
+
+// ---------------------------------------------------------------------------
+// Normalize round result helper
+// ---------------------------------------------------------------------------
+
 function normalizeRoundResult(
   result: "player1" | "player2" | "tie",
   isPlayer1: boolean
 ): "player1" | "player2" | "tie" {
-  if (result === "tie") {
-    return "tie";
-  }
-  if (isPlayer1) {
-    return result;
-  }
-  // Flip the result when we're player2
+  if (result === "tie") return "tie";
+  if (isPlayer1) return result;
   return result === "player1" ? "player2" : "player1";
 }
+
+// ---------------------------------------------------------------------------
+// Main hook
+// ---------------------------------------------------------------------------
 
 export function useGameSocket(
   options: UseGameSocketOptions = {}
@@ -73,26 +213,44 @@ export function useGameSocket(
     setGameStarted,
   } = useGameStore();
 
-  const sendRef = useRef<((message: ClientMessage) => void) | null>(null);
+  // Connection status: lobby drives the overall status; game is secondary
+  const [lobbyStatus, setLobbyStatus] = useState<ConnectionStatus>("disconnected");
+  const [gameStatus, setGameStatus] = useState<ConnectionStatus>("disconnected");
+
   const hasAttemptedReconnect = useRef(false);
   const queryClientRef = useRef(queryClient);
+  const lobbySocketRef = useRef<ManagedSocket | null>(null);
+  const gameSocketRef = useRef<ManagedSocket | null>(null);
 
+  // We need stable refs for values used inside socket callbacks
+  const sessionIdRef = useRef(sessionId);
+  const playerIdRef = useRef(playerId);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
+  useEffect(() => { queryClientRef.current = queryClient; }, [queryClient]);
+
+  // ----- Message handler (shared by both sockets) -----
   const handleMessage = useCallback(
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Message dispatcher handles many message types
     (message: ServerMessage) => {
+      const currentPlayerId = playerIdRef.current;
+      const currentSessionId = sessionIdRef.current;
+
       switch (message.type) {
         case "connected":
-          // If we have a previous sessionId, attempt to reconnect
-          if (sessionId && !hasAttemptedReconnect.current) {
+          if (currentSessionId && !hasAttemptedReconnect.current) {
             hasAttemptedReconnect.current = true;
-            sendRef.current?.({ type: "reconnect", sessionId });
+            lobbySocketRef.current?.send(
+              JSON.stringify({ type: "reconnect", sessionId: currentSessionId })
+            );
           } else {
             setConnected(message.playerId, message.sessionId);
             hasAttemptedReconnect.current = false;
-            // Auto-set name if stored in localStorage
             const storedName = useGameStore.getState().playerName;
             if (storedName) {
-              sendRef.current?.({ type: "setName", name: storedName });
+              lobbySocketRef.current?.send(
+                JSON.stringify({ type: "setName", name: storedName })
+              );
             }
           }
           break;
@@ -114,11 +272,14 @@ export function useGameSocket(
             message.settings.shotClock
           );
           setScreen("lobby");
+          // Auto-connect game socket for the new room
+          connectGameSocket(message.roomCode);
           break;
 
         case "joinedRoom": {
-          // Check if this player is actually in the players array (not a watcher)
-          const isPlayerInGame = message.players.some((p) => p.id === playerId);
+          const isPlayerInGame = message.players.some(
+            (p) => p.id === currentPlayerId
+          );
           joinRoom(message.roomCode, false, isPlayerInGame);
           updateRoomState({
             roomCode: message.roomCode,
@@ -130,20 +291,17 @@ export function useGameSocket(
             message.settings.shotClock
           );
           setGameStarted(message.gameStarted);
-          // Find opponent name if we're a player
           if (isPlayerInGame) {
-            const opponent = message.players.find((p) => p.id !== playerId);
-            if (opponent) {
-              setOpponentName(opponent.name);
-            }
-            // If game is in progress, go directly to game screen
+            const opponent = message.players.find(
+              (p) => p.id !== currentPlayerId
+            );
+            if (opponent) setOpponentName(opponent.name);
             if (message.gameStarted) {
               setScreen("game");
             } else {
               setScreen("lobby");
             }
           } else {
-            // Joined as watcher - show error and redirect
             toast({
               title: "Game Full",
               description:
@@ -152,6 +310,8 @@ export function useGameSocket(
             });
             setScreen("menu");
           }
+          // Connect game socket for this room
+          connectGameSocket(message.roomCode);
           break;
         }
 
@@ -161,22 +321,16 @@ export function useGameSocket(
           setMyMove(null);
           setRoundResult(null);
           setCurrentRound(message.currentRound);
-          // Set opponent name if not already set
-          const opponent = message.players.find((p) => p.id !== playerId);
-          if (opponent) {
-            setOpponentName(opponent.name);
-          }
+          const opponent = message.players.find(
+            (p) => p.id !== currentPlayerId
+          );
+          if (opponent) setOpponentName(opponent.name);
           break;
         }
 
         case "roundResult": {
-          // Determine which player is "me" based on playerId
-          const isPlayer1 = message.player1.id === playerId;
-
-          // Normalize result so player1 is always "me" in the store
+          const isPlayer1 = message.player1.id === currentPlayerId;
           const resultForStore = normalizeRoundResult(message.result, isPlayer1);
-
-          // player1 in our result is always "me"
           const myPlayer = isPlayer1 ? message.player1 : message.player2;
           const opponentPlayer = isPlayer1 ? message.player2 : message.player1;
 
@@ -214,13 +368,12 @@ export function useGameSocket(
           });
           updateScores(message.scores);
           setGameStarted(false);
-          // Only show match end dialog for the winner, not the forfeiter
-          if (message.forfeiterId !== playerId) {
+          if (message.forfeiterId !== currentPlayerId) {
             setScreen("matchEnd");
           }
           toast({
             title:
-              message.forfeiterId === playerId
+              message.forfeiterId === currentPlayerId
                 ? "You forfeited"
                 : "Opponent forfeited",
             description: `${message.winnerName} wins the match!`,
@@ -230,14 +383,16 @@ export function useGameSocket(
         case "leftRoom":
           leaveRoom();
           setScreen("menu");
+          // Disconnect game socket when leaving room
+          disconnectGameSocket();
           break;
 
         case "error":
           console.error("Server error:", message.message);
-          // Room not found - silently redirect to lobby
           if (message.message === "Room not found") {
             leaveRoom();
             setScreen("lobby");
+            disconnectGameSocket();
             break;
           }
           toast({
@@ -252,12 +407,11 @@ export function useGameSocket(
             currentRound: message.currentRound,
             scores: message.scores,
           });
-          // Update opponent name when a player joins (not as watcher)
           if (!message.asWatcher) {
-            const opponent = message.players.find((p) => p.id !== playerId);
-            if (opponent) {
-              setOpponentName(opponent.name);
-            }
+            const opponent = message.players.find(
+              (p) => p.id !== currentPlayerId
+            );
+            if (opponent) setOpponentName(opponent.name);
           }
           break;
         }
@@ -267,9 +421,8 @@ export function useGameSocket(
             currentRound: message.currentRound,
             scores: message.scores,
           });
-          // Clear opponent name if the opponent left
           const remainingOpponent = message.players.find(
-            (p) => p.id !== playerId
+            (p) => p.id !== currentPlayerId
           );
           setOpponentName(remainingOpponent?.name ?? null);
           break;
@@ -317,12 +470,15 @@ export function useGameSocket(
             } else {
               setScreen("lobby");
             }
+            // Reconnect game socket for the room
+            connectGameSocket(message.roomCode);
             toast({
               title: "Reconnected",
               description: "Your game session has been restored.",
             });
           } else if (message.roomGone) {
             setScreen("menu");
+            disconnectGameSocket();
             toast({
               title: "Reconnected",
               description:
@@ -339,11 +495,11 @@ export function useGameSocket(
 
         case "reconnectFailed": {
           hasAttemptedReconnect.current = false;
-          // Check if we have a stored player name
           const storedName = useGameStore.getState().playerName;
           if (storedName) {
-            // Auto-set the name and go to menu
-            sendRef.current?.({ type: "setName", name: storedName });
+            lobbySocketRef.current?.send(
+              JSON.stringify({ type: "setName", name: storedName })
+            );
           } else {
             setScreen("name");
             toast({
@@ -355,7 +511,6 @@ export function useGameSocket(
         }
 
         case "newSession":
-          // Server issued a new session, store it
           setConnected(
             useGameStore.getState().playerId ?? "",
             message.sessionId
@@ -363,7 +518,6 @@ export function useGameSocket(
           break;
 
         case "roomListUpdated":
-          // Invalidate rooms query to refresh lobby
           queryClientRef.current?.invalidateQueries({ queryKey: ["rooms"] });
           break;
 
@@ -385,13 +539,10 @@ export function useGameSocket(
           break;
 
         case "invitationAccepted": {
-          // Opponent accepted our invitation
           const acceptedOpponent = message.players.find(
-            (p) => p.id !== playerId
+            (p) => p.id !== currentPlayerId
           );
-          if (acceptedOpponent) {
-            setOpponentName(acceptedOpponent.name);
-          }
+          if (acceptedOpponent) setOpponentName(acceptedOpponent.name);
           updateRoomState({
             currentRound: message.currentRound,
             scores: message.scores,
@@ -411,13 +562,10 @@ export function useGameSocket(
           break;
 
         default:
-          // Handle other message types as needed
           break;
       }
     },
     [
-      sessionId,
-      playerId,
       setConnected,
       setPlayerName,
       setScreen,
@@ -437,25 +585,107 @@ export function useGameSocket(
     ]
   );
 
-  const handleDisconnect = useCallback(() => {
-    setDisconnected();
-    setScreen("reconnecting");
-  }, [setDisconnected, setScreen]);
+  // ----- Game socket connect / disconnect helpers -----
+  // These are defined as regular functions so they can be called from handleMessage.
+  // They close over the refs.
 
-  const { send, connectionStatus, disconnect } = useWebSocket({
-    url: WS_URL,
-    onMessage: handleMessage,
-    onDisconnect: handleDisconnect,
-  });
+  function connectGameSocket(roomCode: string) {
+    // Disconnect any existing game socket first
+    if (gameSocketRef.current) {
+      gameSocketRef.current.disconnect();
+    }
 
-  // Keep refs updated so message handler can use them
+    const socket = createManagedSocket(
+      () => {
+        const pid = useGameStore.getState().playerId ?? "";
+        const sid = useGameStore.getState().sessionId ?? "";
+        return `${WS_BASE}/ws/room/${roomCode}?playerId=${encodeURIComponent(pid)}&sessionId=${encodeURIComponent(sid)}`;
+      },
+      handleMessage,
+      setGameStatus,
+    );
+    gameSocketRef.current = socket;
+    socket.connect();
+  }
+
+  function disconnectGameSocket() {
+    if (gameSocketRef.current) {
+      gameSocketRef.current.disconnect();
+      gameSocketRef.current = null;
+    }
+    setGameStatus("disconnected");
+  }
+
+  // ----- Lobby socket: connect on mount -----
   useEffect(() => {
-    sendRef.current = send;
-  }, [send]);
+    const socket = createManagedSocket(
+      () => {
+        const pid = useGameStore.getState().playerId ?? "";
+        const sid = useGameStore.getState().sessionId ?? "";
+        return `${WS_BASE}/ws/lobby?playerId=${encodeURIComponent(pid)}&sessionId=${encodeURIComponent(sid)}`;
+      },
+      handleMessage,
+      setLobbyStatus,
+      () => {
+        // When lobby disconnects, show reconnecting screen
+        setDisconnected();
+        setScreen("reconnecting");
+      },
+    );
+    lobbySocketRef.current = socket;
+    socket.connect();
 
-  useEffect(() => {
-    queryClientRef.current = queryClient;
-  }, [queryClient]);
+    return () => {
+      socket.disconnect();
+      lobbySocketRef.current = null;
+      // Also tear down game socket on unmount
+      if (gameSocketRef.current) {
+        gameSocketRef.current.disconnect();
+        gameSocketRef.current = null;
+      }
+    };
+    // handleMessage is stable (useCallback with store actions as deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ----- Route outgoing messages to the correct socket -----
+  const send = useCallback(
+    (message: ClientMessage) => {
+      const data = JSON.stringify(message);
+
+      if (GAME_MESSAGE_TYPES.has(message.type)) {
+        if (gameSocketRef.current?.isOpen()) {
+          gameSocketRef.current.send(data);
+        } else {
+          // Fallback: if game socket isn't connected yet, queue through lobby
+          // This can happen during the brief window between joinRoom response
+          // and game socket connection completing.
+          console.warn(
+            `Game socket not open for message type "${message.type}", sending via lobby socket as fallback`
+          );
+          lobbySocketRef.current?.send(data);
+        }
+      } else if (LOBBY_MESSAGE_TYPES.has(message.type)) {
+        lobbySocketRef.current?.send(data);
+      } else {
+        // Unknown message type — try lobby socket as default
+        console.warn(`Unknown message type "${message.type}", routing to lobby socket`);
+        lobbySocketRef.current?.send(data);
+      }
+    },
+    []
+  );
+
+  // ----- Disconnect both sockets -----
+  const disconnect = useCallback(() => {
+    lobbySocketRef.current?.disconnect();
+    lobbySocketRef.current = null;
+    gameSocketRef.current?.disconnect();
+    gameSocketRef.current = null;
+  }, []);
+
+  // Overall connection status: lobby is primary
+  const connectionStatus: ConnectionStatus = lobbyStatus;
 
   return useMemo(
     () => ({

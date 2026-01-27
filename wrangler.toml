@@ -1,0 +1,28 @@
+name = "rockpaperscissors"
+main = "worker/src/index.ts"
+compatibility_date = "2024-12-01"
+
+[site]
+bucket = "./dist"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "rps-db"
+database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Replace with actual D1 database ID
+
+# Durable Objects
+[durable_objects]
+bindings = [
+  { name = "GAME_ROOM", class_name = "GameRoom" },
+  { name = "LOBBY", class_name = "Lobby" },
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["GameRoom", "Lobby"]
+
+# Environment variables
+[vars]
+WEBAUTHN_RP_ID = "rockpaperscissors.example.com"
+WEBAUTHN_ORIGIN = "https://rockpaperscissors.example.com"
